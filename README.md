@@ -5,11 +5,24 @@ This displays an oscilloscope screen on a 128x64 OLED.
 The settings are controled by the 5 direction switch.
 It contains Pulse Generator, DDS Function Generator.
 
+Specifications:
+<li>Dual input channel</li>
+<li>Input voltage range 0 to 3.3V</li>
+<li>2.57 Msps ADC</li>
+<li>Measures minimum, maximum and average values</li>
+<li>Measures frequency and duty cycle</li>
+<li>Spectrum FFT analysis</li>
+<li>Sampling rate selection</li>
+<li>Contains Pulse Generator</li>
+<li>Contains DDS Function Generator</li>
+<br>
+<p>
 Develop environment is:<br>
 Arduino IDE 1.8.19<br>
 STM32F1xx/GD32F1xx boards by stm32duino version 2022.9.26<br>
   (additional URL: http://dan.drown.org/stm32duino/package_STM32duino_index.json )<br>
 CPU speed 72MHz<br>
+</p>
 
 Libraries:<br>
 Adafruit_SSD1306<br>
