@@ -13,8 +13,8 @@ Specifications:
 <li>Measures frequency and duty cycle</li>
 <li>Spectrum FFT analysis</li>
 <li>Sampling rate selection</li>
-<li>Contains Pulse Generator</li>
-<li>Contains DDS Function Generator</li>
+<li>Built in Pulse Generator</li>
+<li>Built in DDS Function Generator</li>
 <br>
 <p>
 Develop environment is:<br>
