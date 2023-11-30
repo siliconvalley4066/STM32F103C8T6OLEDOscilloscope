@@ -1,35 +1,32 @@
 // When using 72Mhz on the MCU main clock, the fastest ADC capture time is 0.39 uS.
 // If we use 2 ADCs in interleave mode we may get double the captures, that is .19 uS.
-// However, due tothe deviations between ADC1 and ADC2, the waveform becomes jagged.
+// However, due to the deviations between ADC1 and ADC2, the waveform becomes jagged.
 // There is a possibility to overclock the MCU main clock up to 120MHz.
+
+#include <STM32ADC.h>
 
 #define ADC_CR1_FASTINT 0x70000         // Fast interleave mode DUAL MODE bits 19-16
 volatile static bool dma1_ch1_Active;   // End of DMA indication
 float samplingTime = 0;
+STM32ADC myADC1(ADC1), myADC2(ADC1);
 
 void dmaadc_setup() {   //Setup ADC peripherals for interleaved continuous mode.
-  int pinMapADCin = PIN_MAP[ad_ch0].adc_channel;
-  int pinMapADCin2 = PIN_MAP[ad_ch1].adc_channel;
-
   adc_set_reg_seqlen(ADC1, 1);
-  ADC1->regs->SQR3 = pinMapADCin;
-  ADC1->regs->CR2 |= ADC_CR2_CONT;    // | ADC_CR2_DMA; // Set continuous mode and DMA
-  // set ADC2 in regular simultaneous mode
-  ADC1->regs->CR1 |= 0x60000;     
-  ADC1->regs->CR2 |= ADC_CR2_SWSTART;
-
-  ADC2->regs->CR2 |= ADC_CR2_CONT;    // ADC 2 continuos
-  ADC2->regs->SQR3 = pinMapADCin2;
+  adc_set_reg_seqlen(ADC2, 1);
+  ADC1->regs->SQR3 = PIN_MAP[ad_ch0].adc_channel;
+  ADC2->regs->SQR3 = PIN_MAP[ad_ch1].adc_channel;
+  ADC1->regs->CR1 |= 0x60000;         // set ADC1 in regular simultaneous mode
+  ADC2->regs->CR1 |= 0x60000;         // set ADC2 in regular simultaneous mode
+  ADC1->regs->CR2 |= ADC_CR2_CONT | ADC_CR2_SWSTART;  // ADC 1 continuos
+  ADC2->regs->CR2 |= ADC_CR2_CONT | ADC_CR2_SWSTART;  // ADC 2 continuos
 }
 
 void takeSamples() {
-  // This loop uses dual interleaved mode to get the best performance out of the ADCs
+  // This loop uses regular simultaneous mode to get the best performance out of the ADCs
   dma_init(DMA1);
   dma_attach_interrupt(DMA1, DMA_CH1, DMA1_CH1_Event);
   adc_dma_enable(ADC1);
-  dma_setup_transfer(DMA1, DMA_CH1, &ADC1->regs->DR, DMA_SIZE_32BITS,
-                     cap_buf32, DMA_SIZE_32BITS, (DMA_MINC_MODE | DMA_TRNS_CMPLT));
-  dma_set_num_transfers(DMA1, DMA_CH1, NSAMP / 2);
+  myADC1.setDualDMA(cap_buf32, NSAMP / 2, DMA_MINC_MODE | DMA_TRNS_CMPLT);
   dma1_ch1_Active = 1;
   dma_enable(DMA1, DMA_CH1); // Enable the channel and start the transfer.
 //  samplingTime = micros();
@@ -53,39 +50,41 @@ void adc_set_speed(void) {
   switch (rate) {
     case 0:
       adc_set_prescaler(ADC_PRE_PCLK2_DIV_2);
-      adc_set_sample_rate(PIN_MAP[ad_ch0].adc_device,ADC_SMPR_1_5);
-      adc_set_sample_rate(PIN_MAP[ad_ch1].adc_device,ADC_SMPR_1_5);
-      dmaadc_setup();
+      myADC1.setSampleRate(ADC_SMPR_1_5);
+      myADC2.setSampleRate(ADC_SMPR_1_5);
       break;
     case 1:
       adc_set_prescaler(ADC_PRE_PCLK2_DIV_4);
-      adc_set_sample_rate(PIN_MAP[ad_ch0].adc_device,ADC_SMPR_7_5);
-      adc_set_sample_rate(PIN_MAP[ad_ch1].adc_device,ADC_SMPR_7_5);
-      dmaadc_setup();
+      myADC1.setSampleRate(ADC_SMPR_7_5);
+      myADC2.setSampleRate(ADC_SMPR_7_5);
       break;
     case 2:
       adc_set_prescaler(ADC_PRE_PCLK2_DIV_4);
-      adc_set_sample_rate(PIN_MAP[ad_ch0].adc_device,ADC_SMPR_28_5);
-      adc_set_sample_rate(PIN_MAP[ad_ch1].adc_device,ADC_SMPR_28_5);
-      dmaadc_setup();
+      myADC1.setSampleRate(ADC_SMPR_28_5);
+      myADC2.setSampleRate(ADC_SMPR_28_5);
       break;
     case 3:
       adc_set_prescaler(ADC_PRE_PCLK2_DIV_6);
-      adc_set_sample_rate(PIN_MAP[ad_ch0].adc_device,ADC_SMPR_55_5);
-      adc_set_sample_rate(PIN_MAP[ad_ch1].adc_device,ADC_SMPR_55_5);
-      dmaadc_setup();
+      myADC1.setSampleRate(ADC_SMPR_55_5);
+      myADC2.setSampleRate(ADC_SMPR_55_5);
       break;
     case 4: 
     case 5:
       adc_set_prescaler(ADC_PRE_PCLK2_DIV_2);
-      adc_set_sample_rate(PIN_MAP[ad_ch0].adc_device,ADC_SMPR_7_5);
-      adc_set_sample_rate(PIN_MAP[ad_ch1].adc_device,ADC_SMPR_7_5);
+      myADC1.setSampleRate(ADC_SMPR_7_5);
+      myADC2.setSampleRate(ADC_SMPR_7_5);
       break;
     default:
       adc_set_prescaler(ADC_PRE_PCLK2_DIV_6);
-      adc_set_sample_rate(PIN_MAP[ad_ch0].adc_device,ADC_SMPR_55_5);
-      adc_set_sample_rate(PIN_MAP[ad_ch1].adc_device,ADC_SMPR_55_5);
+      myADC1.setSampleRate(ADC_SMPR_55_5);
+      myADC2.setSampleRate(ADC_SMPR_55_5);
       break;
+  }
+  if (rate <= RATE_DMA)
+    dmaadc_setup();
+  else {
+    myADC1.resetContinuous();
+    myADC2.resetContinuous();
   }
 }
 
