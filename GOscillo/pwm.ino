@@ -123,5 +123,5 @@ void pulse_close(void) {
 }
 
 void setduty(void) {
-  Timer2.setCompare(TIMER_CH4, map(duty, 0, 255, 0, count));
+  Timer2.setCompare(TIMER_CH4, map((unsigned short)duty, 0, 255, 0, count));
 }

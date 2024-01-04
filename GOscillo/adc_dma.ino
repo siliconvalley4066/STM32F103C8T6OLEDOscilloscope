@@ -5,10 +5,10 @@
 
 #include <STM32ADC.h>
 
-#define ADC_CR1_FASTINT 0x70000         // Fast interleave mode DUAL MODE bits 19-16
+//#define ADC_CR1_FASTINT 0x70000         // Fast interleave mode DUAL MODE bits 19-16
 volatile static bool dma1_ch1_Active;   // End of DMA indication
 float samplingTime = 0;
-STM32ADC myADC1(ADC1), myADC2(ADC1);
+STM32ADC myADC1(ADC1), myADC2(ADC2);
 
 void dmaadc_setup() {   //Setup ADC peripherals for interleaved continuous mode.
   adc_set_reg_seqlen(ADC1, 1);
