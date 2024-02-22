@@ -1,6 +1,6 @@
 /*
- * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.02
- * The max DMA sampling rates is 2.57Msps with 2 channels.
+ * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.03
+ * The max DMA sampling rates is 5.14Msps with single channel, 2.57Msps with 2 channels.
  * The max realtime sampling rates is 100ksps with 2 channels.
  * + Pulse Generator
  * + PWM DDS Function Generator (23 waveforms)
@@ -29,9 +29,7 @@ Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, 
 #define WHITE 1
 #define BLACK 0
 #endif
-#ifndef ARDUINO_ARCH_MBED_RP2040
 #define EEPROM_START 0
-#endif
 #ifdef EEPROM_START
 #include <EEPROM.h>
 #endif
@@ -88,14 +86,16 @@ const char TRIG_Modes[4][5] PROGMEM = {"Auto", "Norm", "Scan", "One"};
 const int TRIG_E_UP = 0;
 const int TRIG_E_DN = 1;
 #define RATE_MIN 0
-#define RATE_MAX 19
-#define RATE_NUM 20
-#define RATE_DMA 3
-#define RATE_DUAL 0
-#define RATE_ROLL 15
+#define RATE_MAX 20
+#define RATE_NUM 21
+#define RATE_ILV 0
+#define RATE_DMA 4
+#define RATE_DUAL 1
+#define RATE_ROLL 16
 #define ITEM_MAX 29
-const char Rates[RATE_NUM][5] PROGMEM = {"3.9u", "11u ", "23us", "57us", "100u", "200u", "500u", " 1ms", " 2ms", " 5ms", "10ms", "20ms", "50ms", "0.1s", "0.2s", "0.5s", " 1s ", " 2s ", " 5s ", " 10s"};
-const unsigned long HREF[] PROGMEM = {4, 7, 23, 57, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000, 2000000, 5000000, 10000000};
+const char Rates[RATE_NUM][5] PROGMEM = {"1.9u", "3.9u", "11u ", "23us", "57us", "100u", "200u", "500u", " 1ms", " 2ms", " 5ms", "10ms", "20ms", "50ms", "0.1s", "0.2s", "0.5s", " 1s ", " 2s ", " 5s ", " 10s"};
+const unsigned long HREF[] PROGMEM = {2, 4, 11, 23, 57, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000, 2000000, 5000000, 10000000};
+const float dmahref[5] = {1.944, 3.889, 11.11, 22.78, 56.67};
 #define RANGE_MIN 0
 #define RANGE_MAX 4
 #define VRF 3.3
@@ -117,7 +117,7 @@ bool fft_mode = false, pulse_mode = false, dds_mode = false, fcount_mode = false
 bool full_screen = false;
 byte info_mode = 3; // Text information display mode
 int trigger_ad;
-const double sys_clk = 72e6;
+const double sys_clk = (double)F_CPU;
 volatile bool wfft, wdds;
 
 #define LEFTPIN   PB13  // LEFT
@@ -195,6 +195,7 @@ void CheckSW() {
   if (wrate != 0) {
     updown_rate(wrate);
     wrate = 0;
+    saveTimer = 5000;     // set EEPROM save timer to 5 secnd
   }
 
 /* SW10 Menu
@@ -397,7 +398,10 @@ void menu1_sw(byte sw) {
       else
         ch1_mode = MODE_ON;
     } else if (sw == 7) { // CH1 - ON/OFF
-      if (ch1_mode == MODE_OFF)
+      if (rate <= RATE_ILV && ch0_mode != MODE_OFF) {
+        ch0_mode = MODE_OFF;
+        ch1_mode = MODE_ON;
+      } else if (ch1_mode == MODE_OFF)
         ch1_mode = MODE_ON;
       else
         ch1_mode = MODE_OFF;
@@ -652,7 +656,11 @@ void DrawText() {
     set_line_color(4);
     display.print("CH2"); display_ac(CH1DCSW);
     set_line_color(5);
-    display_mode(ch1_mode);
+    if (rate <= RATE_ILV && ch0_mode != MODE_OFF) {
+      display_mode(MODE_OFF);
+    } else {
+      display_mode(ch1_mode);
+    }
     set_line_color(6);
     display_range(range1);
     set_line_color(7);
@@ -887,7 +895,7 @@ void loop() {
         }
         oad = ad;
 
-        if (rate > 9)
+        if (rate > 10)
           CheckSW();      // no need for fast sampling
         if (trig_mode == TRIG_SCAN)
           break;
@@ -900,9 +908,15 @@ void loop() {
   // sample and draw depending on the sampling rate
   if (rate < RATE_ROLL && Start) {
 
-    if (rate <= RATE_DMA) {   // DMA, min 0.39us sampling (2.57Msps)
+    if (rate <= RATE_ILV) {   // DMA interleave, min 0.19us sampling (5.14Msps)
+      interleave_setup();
+      if (ch0_mode != MODE_OFF)
+        takeSamples_ilv(ad_ch0);
+      else if (ch1_mode != MODE_OFF)
+        takeSamples_ilv(ad_ch1);
+    } else if (rate <= RATE_DMA) {   // DMA, min 0.39us sampling (2.57Msps)
       takeSamples();
-    } else if (rate <= 8) {   // dual channel 10us, 20us, 50us, 100us, 200us sampling
+    } else if (rate <= 9) {   // dual channel 10us, 20us, 50us, 100us, 200us sampling
       sample_dual_us(HREF[rate] / 10);
     } else {                // dual channel .5ms, 1ms, 2ms, 5ms, 10ms, 20ms sampling
       sample_dual_ms(HREF[rate] / 10);
@@ -1104,7 +1118,7 @@ void draw_scale() {
   float fhref, nyquist;
   display.setTextColor(TXTCOLOR);
   display.setCursor(0, ylim); display.print("0Hz"); 
-  fhref = (float)HREF[rate];
+  fhref = freqhref();
   nyquist = 5.0e6 / fhref; // Nyquist frequency
   if (nyquist > 999.0) {
     nyquist = nyquist / 1000.0;
@@ -1123,6 +1137,16 @@ void draw_scale() {
     display.setCursor(58, ylim); display.print(nyquist/2,0);
     display.setCursor(110, ylim); display.print(nyquist,0);
   }
+}
+
+float freqhref() {
+  float fhref;
+  if (rate <= RATE_DMA) {   // DMA sampling
+    fhref = dmahref[rate];
+  } else {
+    fhref = (float) HREF[rate];
+  }
+  return fhref;
 }
 
 #ifdef EEPROM_START

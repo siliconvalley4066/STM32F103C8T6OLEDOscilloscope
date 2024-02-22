@@ -43,8 +43,6 @@ void dataAnalize(int ch) {    // 波形の分析 get various information from wa
 //  dataRms = sqrt(sum / SAMPLES);          // 実効値の10倍の値 get rms value
 }
 
-float dmahref[4] = {3.89, 11.11, 22.78, 56.67};
-
 void freqDuty(int ch) {                         // 周波数とデューティ比を求める detect frequency and duty cycle value from waveform data
   int swingCenter;                              // center of wave (half of p-p)
   float p0 = 0;                                 // 1-st posi edge
@@ -99,12 +97,7 @@ void freqDuty(int ch) {                         // 周波数とデューティ�
     pWidth  = 0;        // pulse width
   }
 
-  float fhref;
-  if (rate <= RATE_DMA) {   // DMA sampling
-    fhref = dmahref[rate];
-  } else {
-    fhref = (float) HREF[rate];
-  }
+  float fhref = freqhref();
   waveFreq[ch] = 10.0e6 / (fhref * pPeriod);  // frequency
   waveDuty[ch] = 100.0 * pWidth / pPeriod;    // duty ratio
 }
