@@ -1,7 +1,7 @@
 /*
- * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.03
+ * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.04
  * The max DMA sampling rates is 5.14Msps with single channel, 2.57Msps with 2 channels.
- * The max realtime sampling rates is 100ksps with 2 channels.
+ * The max software loop sampling rates is 100ksps with 2 channels.
  * + Pulse Generator
  * + PWM DDS Function Generator (23 waveforms)
  * Copyright (c) 2023, Siliconvalley4066
@@ -35,7 +35,9 @@ Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, 
 #endif
 #include "arduinoFFT.h"
 #define FFT_N 128
-arduinoFFT FFT = arduinoFFT();  // Create FFT object
+double vReal[FFT_N]; // Real part array, actually float type
+double vImag[FFT_N]; // Imaginary part array
+ArduinoFFT<double> FFT = ArduinoFFT<double>(vReal, vImag, FFT_N, 1.0);  // Create FFT object
 
 #define txtLINE0   0
 #define txtLINE1   8
@@ -1091,9 +1093,6 @@ void sample_dual_ms(unsigned int r) { // dual channel. r > 500
   scaleDataArray(ad_ch1, 0);
 }
 
-double vReal[FFT_N]; // Real part array, actually float type
-double vImag[FFT_N]; // Imaginary part array
-
 void plotFFT() {
   int ylim = 56;
 
@@ -1101,10 +1100,10 @@ void plotFFT() {
     vReal[i] = cap_buf[i];
     vImag[i] = 0.0;
   }
-  FFT.DCRemoval(vReal, FFT_N);
-  FFT.Windowing(vReal, FFT_N, FFT_WIN_TYP_HANN, FFT_FORWARD); // Weigh data
-  FFT.Compute(vReal, vImag, FFT_N, FFT_FORWARD);          // Compute FFT
-  FFT.ComplexToMagnitude(vReal, vImag, FFT_N);            // Compute magnitudes
+  FFT.dcRemoval();
+  FFT.windowing(FFTWindow::Hann, FFTDirection::Forward);  // Weigh data
+  FFT.compute(FFTDirection::Forward);                     // Compute FFT
+  FFT.complexToMagnitude();                               // Compute magnitudes
   for (int i = 1; i < FFT_N/2; i++) {
     float db = log10(vReal[i]);
     int dat = constrain((int)(15.0 * db - 20), 0, ylim);
@@ -1254,7 +1253,9 @@ void loadEEPROM() { // Read setting values from EEPROM (abnormal values will be 
   *((uint16 *)&ifreq) = EEPROM.read(p++);     // ifreq low
   *((uint16 *)&ifreq + 1) = EEPROM.read(p++); // ifreq high
   if (ifreq > 999999L) ++error;
-  if (error > 0)
+  if (error > 0) {
+    EEPROM.format();
     set_default();
+  }
 }
 #endif

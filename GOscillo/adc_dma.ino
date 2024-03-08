@@ -63,8 +63,7 @@ void takeSamples_ilv(byte ad_ch) {
   dma_disable(DMA1, DMA_CH1); //End of trasfer, disable DMA and Continuous mode.
   order_capture(ad_ch);
   int t = trigger_point();
-  scaleDataArray(ad_ch0, t);
-  scaleDataArray(ad_ch1, t);
+  scaleDataArray(ad_ch, t);
 //  debug_print();
 }
 
