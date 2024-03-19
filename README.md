@@ -9,6 +9,7 @@ Specifications:
 <li>Dual input channel</li>
 <li>Input voltage range 0 to 3.3V</li>
 <li>12 bit ADC 5.14 Msps single channel, 2.57 Msps dual channel</li>
+<li>timebase magnification x2, x5 and x10 applying sin(x)/x interpolation</li>
 <li>Measures minimum, maximum and average values</li>
 <li>Measures frequency and duty cycle</li>
 <li>Spectrum FFT analysis</li>
