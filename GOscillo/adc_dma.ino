@@ -11,8 +11,8 @@ STM32ADC myADC1(ADC1), myADC2(ADC2);
 void dmaadc_setup() {   //Setup ADC peripherals for regular simultaneous mode.
   adc_set_reg_seqlen(ADC1, 1);
 //  adc_set_reg_seqlen(ADC2, 1);
-  ADC2->regs->CR2 &= ~ADC_CR2_CONT; // ADC 2 reset continuos
-  ADC1->regs->CR2 &= ~ADC_CR2_CONT; // ADC 1 reset continuos
+  ADC2->regs->CR2 &= ~ADC_CR2_CONT;   // ADC 2 reset continuos
+  ADC1->regs->CR2 &= ~ADC_CR2_CONT;   // ADC 1 reset continuos
   ADC1->regs->SQR3 = PIN_MAP[ad_ch0].adc_channel;
   ADC2->regs->SQR3 = PIN_MAP[ad_ch1].adc_channel;
   ADC1->regs->CR1 = 0x60000;          // set ADC1 in regular simultaneous mode
@@ -24,8 +24,8 @@ void dmaadc_setup() {   //Setup ADC peripherals for regular simultaneous mode.
 void dmaadc_ilv_setup(byte ad_ch) {   //Setup ADC peripherals for Fast interleaved mode.
   adc_set_reg_seqlen(ADC1, 1);
 //  adc_set_reg_seqlen(ADC2, 1);
-  ADC2->regs->CR2 &= ~ADC_CR2_CONT; // ADC 2 reset continuos
-  ADC1->regs->CR2 &= ~ADC_CR2_CONT; // ADC 1 reset continuos
+  ADC2->regs->CR2 &= ~ADC_CR2_CONT;   // ADC 2 reset continuos
+  ADC1->regs->CR2 &= ~ADC_CR2_CONT;   // ADC 1 reset continuos
   ADC1->regs->SQR3 = PIN_MAP[ad_ch].adc_channel;
   ADC2->regs->SQR3 = PIN_MAP[ad_ch].adc_channel;
   ADC1->regs->CR1 = ADC_CR1_FASTINT;  // set ADC1 in Fast Interleaved mode

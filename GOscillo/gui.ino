@@ -1,3 +1,126 @@
+void DrawText() {
+  display.fillRect(DISPLNG+1,0,27,64, BGCOLOR); // clear text area that will be drawn below 
+
+  switch (menu) {
+  case 0:
+    set_line_color(0);
+    if (ch0_mode != MODE_OFF) {
+      display_range(range0);
+    } else {
+      display.print("CH2"); display_ac(CH1DCSW);
+    }
+    set_line_color(1);
+    if (ch1_mode != MODE_OFF) {
+      display_range(range1);
+    } else {
+      display.print("CH1"); display_ac(CH0DCSW);
+    }
+    set_line_color(2);
+    display_rate();
+    set_line_color(3);
+    if (time_mag == 2) display.print(" x2 ");
+    else if (time_mag == 5) display.print(" x5 ");
+    else if (time_mag == 10) display.print("x10 ");
+    else if (rate > RATE_DMA) display.print("real");
+    else display.print("DMA ");
+    set_line_color(4);
+    display_trig_mode();
+    set_line_color(5);
+    display.print(trig_ch == ad_ch0 ? "TG1" : "TG2"); 
+    display.print(trig_edge == TRIG_E_UP ? char(0x18) : char(0x19)); 
+    set_line_color(6);
+    display.print("Tlev"); 
+    set_line_color(7);
+    display.print(Start ? "RUN " : "HOLD"); 
+    break;
+  case 1:
+    set_line_color(0);
+    display.print("CH1"); display_ac(CH0DCSW);
+    set_line_color(1);
+    display_mode(ch0_mode);
+    set_line_color(2);
+    display_range(range0);
+    set_line_color(3);
+    display.print("OFS1"); 
+    set_line_color(4);
+    display.print("CH2"); display_ac(CH1DCSW);
+    set_line_color(5);
+    if (rate <= RATE_ILV && ch0_mode != MODE_OFF) {
+      display_mode(MODE_OFF);
+    } else {
+      display_mode(ch1_mode);
+    }
+    set_line_color(6);
+    display_range(range1);
+    set_line_color(7);
+    display.print("OFS2");
+    break;
+  case 2:
+    set_line_color(0);
+    display_range(range0);
+    set_line_color(1);
+    display_rate();
+    set_line_color(2);
+    if (!fft_mode) {
+      display.print("FFT "); 
+      set_line_color(3);
+      display.print("FREQ"); 
+      set_line_color(4);
+      display.print("VOLT"); 
+      set_line_color(5);
+      display.print("PWM "); 
+      set_line_color(6);
+      display.print("DUTY"); 
+      set_line_color(7);
+      display.print("FREQ");
+      if (pulse_mode && (item > 20 && item < 24)) {
+        display.setTextColor(TXTCOLOR, BGCOLOR);
+        display.setCursor(DISPLNG - 54, txtLINE7);
+        disp_pulse_frq();
+        display.setCursor(DISPLNG - 36, txtLINE6);
+        disp_pulse_dty();
+      }
+    }
+    break;
+  case 3:
+    set_line_color(0);
+    display_range(range0);
+    set_line_color(1);
+    display_rate();
+    set_line_color(2);
+    display.print("DDS ");
+    set_line_color(3);
+    disp_dds_wave();
+    set_line_color(4);
+    display.print("FREQ");
+    if (dds_mode && (item > 25 && item < 29)) {
+      display.setTextColor(TXTCOLOR, BGCOLOR);
+      display.setCursor(72, txtLINE7);
+      disp_dds_freq();
+    }
+    set_line_color(5);
+    if (info_mode & 4)
+      display.print("MSR2");
+    else
+      display.print("MSR1");
+    break;
+  }
+  if (info_mode & 3) {
+    int ch = (info_mode & 4) ? 1 : 0;
+    dataAnalize(ch);
+    if (info_mode & 1)
+      measure_frequency(ch);
+    if (info_mode & 2)
+      measure_voltage(ch);
+  }
+  if (!full_screen && !fft_mode)
+    draw_trig_level(GRIDCOLOR);
+}
+
+void draw_trig_level(int color) { // draw trig_lv mark
+  display.drawFastHLine(DISPLNG, LCD_YMAX - trig_lv, 3, color); // draw trig_lv tic
+}
+
 #define BTN_UP    0
 #define BTN_DOWN  10
 #define BTN_LEFT  7
@@ -64,7 +187,7 @@ void CheckSW() {
   saveTimer = 5000;     // set EEPROM save timer to 5 secnd
   if (sw == BTN_FULL) {
     full_screen = !full_screen;
-    display.fillRect(DISPLNG + 1,0,27,64, BGCOLOR); // clear text area that will be drawn below 
+    display.fillRect(DISPLNG + 1,0,27,LCD_HEIGHT, BGCOLOR); // clear text area that will be drawn below 
   } else {
     switch (menu) {
     case 0:
@@ -207,13 +330,15 @@ void menu1_sw(byte sw) {
     if (sw == BTN_RIGHT) {        // CH0 + ON/INV
       if (ch0_mode == MODE_ON)
         ch0_mode = MODE_INV;
-      else
+      else {
         ch0_mode = MODE_ON;
+      }
     } else if (sw == BTN_LEFT) {  // CH0 - ON/OFF
-      if (ch0_mode == MODE_OFF)
+      if (ch0_mode == MODE_OFF) {
         ch0_mode = MODE_ON;
-      else
+      } else {
         ch0_mode = MODE_OFF;
+      }
     }
     break;
   case 2: // CH0 voltage range
@@ -221,7 +346,7 @@ void menu1_sw(byte sw) {
     break;
   case 3: // CH0 offset
     if (sw == BTN_RIGHT) {        // offset +
-      if (ch0_off < 4095)
+      if (ch0_off < 8191)
         ch0_off += 4096/VREF[range0];
     } else if (sw == BTN_LEFT) {  // offset -
       if (ch0_off > -4095)
@@ -243,10 +368,11 @@ void menu1_sw(byte sw) {
       if (rate <= RATE_ILV && ch0_mode != MODE_OFF) {
         ch0_mode = MODE_OFF;
         ch1_mode = MODE_ON;
-      } else if (ch1_mode == MODE_OFF)
+      } else if (ch1_mode == MODE_OFF) {
         ch1_mode = MODE_ON;
-      else
+      } else {
         ch1_mode = MODE_OFF;
+      }
     }
     break;
   case 6: // CH1 voltage range
@@ -254,7 +380,7 @@ void menu1_sw(byte sw) {
     break;
   case 7: // CH1 offset
     if (sw == BTN_RIGHT) {        // offset +
-      if (ch1_off < 4095)
+      if (ch1_off < 8191)
         ch1_off += 4096/VREF[range1];
     } else if (sw == BTN_LEFT) {  // offset -
       if (ch1_off > -4095)
@@ -343,7 +469,7 @@ void menu2_sw(byte sw) {
         pulse_start();
       }
       pulse_mode = true;
-    } else if (sw == BTN_LEFT) { // -
+    } else if (sw == BTN_LEFT) {  // -
       if (pulse_mode)
         update_frq(diff);
       else {

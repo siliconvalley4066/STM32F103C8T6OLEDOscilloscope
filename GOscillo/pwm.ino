@@ -3,18 +3,18 @@
 byte duty = 128;  // duty ratio = duty/256
 byte p_range = 0;
 unsigned short count;
-const long range_min[9] PROGMEM = {1, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767};
-const int range_div[9] PROGMEM = {1, 2, 4, 8, 16, 32, 64, 128, 256};
+const long range_min[17] PROGMEM = {1, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767};
+const long range_div[17] PROGMEM = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536};
 
-double pulse_frq(void) {          // 4.29Hz <= freq <= 36MHz
-  int divide = range_div[p_range];
-  return(sys_clk / (((long)count + 1) * divide));
+double pulse_frq(void) {          // 0.01676Hz <= freq <= 36MHz
+  long divide = range_div[p_range];
+  return(sys_clk / ((double)((long)count + 1) * (double)divide));
 }
 
 void set_pulse_frq(float freq) {
   if (freq > (float)(sys_clk / 2)) freq = sys_clk / 2;
-  p_range = constrain(9 - int(10.0 - log(sys_clk / 32768.0 / freq)/log(2)), 0, 8);
-  int divide = range_div[p_range];
+  p_range = constrain(9 - int(10.0 - log(sys_clk / 32768.0 / freq)/log(2)), 0, 16);
+  long divide = range_div[p_range];
   setCounter(divide);
   count = (float)sys_clk/freq/(float)divide - 1;
   Timer2.setOverflow(count);
@@ -22,8 +22,8 @@ void set_pulse_frq(float freq) {
 }
 
 void pulse_init() {
-  int divide;
-  p_range = constrain(p_range, 0, 8);
+  long divide;
+  p_range = constrain(p_range, 0, 16);
   divide = range_div[p_range];
 
   pinMode(PWMPin, PWM);
@@ -36,8 +36,8 @@ void pulse_init() {
 }
 
 void update_frq(int diff) {
-  int divide, fast;
-  long newCount;
+  int fast;
+  long divide, newCount;
 
   if (abs(diff) > 3) {
     fast = 512;
@@ -58,7 +58,7 @@ void update_frq(int diff) {
       newCount = 65535;
     }
   } else if (newCount > 65535) {
-    if (p_range < 8) {
+    if (p_range < 16) {
       ++p_range;
       newCount = range_min[p_range];
     } else {
@@ -73,11 +73,7 @@ void update_frq(int diff) {
 }
 
 void disp_pulse_frq(void) {
-  float freq;
-  int divide = range_div[p_range];
-  freq = sys_clk / (((long)count + 1) * divide);
-  display.setTextColor(TXTCOLOR, BGCOLOR);
-  display.setCursor(72, 56);
+  float freq = pulse_frq();
   if (freq < 10.0) {
     display.print(freq, 5);
   } else if (freq < 100.0) {
@@ -89,18 +85,27 @@ void disp_pulse_frq(void) {
   } else if (freq < 100000.0) {
     display.print(freq, 1);
   } else if (freq < 1000000.0) {
-    display.setCursor(78, 56);
-    display.print(freq, 0);
+    display.print(freq * 1e-3, 2); display.print('k');
   } else if (freq < 10000000.0) {
-    display.print(freq, 0);
+    display.print(freq * 1e-6, 4); display.print('M');
   } else {
-    display.setCursor(66, 56);
-    display.print(freq, 0);
+    display.print(freq * 1e-6, 3); display.print('M');
   }
   display.print("Hz");
-  display.setCursor(72, 48);
-//  display.print(duty*100.0/256.0, 1); display.print('%');
-  display.print(duty*0.390625, 1); display.print('%');
+}
+
+void disp_pulse_dty(void) {
+  static bool sp = true;
+  float fduty = duty*100.0/256.0;
+  display.print(fduty, 1); display.print('%');
+  if (fduty < 9.95) {
+    if (sp) {
+      display.print(' ');
+      sp = false;
+    }
+  } else {
+    sp = true;
+  }
 }
 
 void setCounter(int divide) {
