@@ -1,11 +1,11 @@
 # STM32F103C8T6OLEDOscilloscope
 STM32F103C8T6 OLED dual channel oscilloscope with Pulse Generator, DDS Function Generator
 
+<img src="DSC03454.jpg">
+
 This displays an oscilloscope screen on a 128x64 OLED.
 The settings are controled by the 5 direction switch.
 It contains Pulse Generator, DDS Function Generator.
-
-<img src="DSC03454.jpg">
 
 Specifications:
 <li>Dual input channel</li>
