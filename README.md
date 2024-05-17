@@ -5,6 +5,8 @@ This displays an oscilloscope screen on a 128x64 OLED.
 The settings are controled by the 5 direction switch.
 It contains Pulse Generator, DDS Function Generator.
 
+<img src="DSC03454.jpg">
+
 Specifications:
 <li>Dual input channel</li>
 <li>Input voltage range 0 to 3.3V</li>
