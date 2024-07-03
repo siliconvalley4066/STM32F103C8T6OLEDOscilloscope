@@ -128,5 +128,8 @@ void pulse_close(void) {
 }
 
 void setduty(void) {
-  Timer2.setCompare(TIMER_CH4, map((unsigned short)duty, 0, 255, 0, count));
+  if (count < 2)
+    Timer2.setCompare(TIMER_CH4, 1);  // for max frequency 50% duty only
+  else
+    Timer2.setCompare(TIMER_CH4, map((unsigned short)duty, 0, 255, 0, count));
 }

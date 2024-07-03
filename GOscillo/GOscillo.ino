@@ -1,5 +1,5 @@
 /*
- * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.06
+ * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.07
  * The max DMA sampling rates is 5.14Msps with single channel, 2.57Msps with 2 channels.
  * The max software loop sampling rates is 100ksps with 2 channels.
  * + Pulse Generator
@@ -755,6 +755,7 @@ void loadEEPROM() { // Read setting values from EEPROM (abnormal values will be 
   if (ifreq > 999999L) ++error;
   time_mag = EEPROM.read(p++);               // magnify timebase
   if (error > 0) {
+    EEPROM.format();
     set_default();
   }
 }

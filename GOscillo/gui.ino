@@ -144,7 +144,7 @@ void CheckSW() {
   if (wrate != 0) {
     updown_rate(wrate);
     wrate = 0;
-    saveTimer = 5000;     // set EEPROM save timer to 5 secnd
+    saveTimer = 5000;     // set EEPROM save timer to 5 second
   }
 
 /* SW10 Menu
@@ -184,7 +184,7 @@ void CheckSW() {
   }
   if (sw != lastsw)
     vtime = ms;
-  saveTimer = 5000;     // set EEPROM save timer to 5 secnd
+  saveTimer = 5000;     // set EEPROM save timer to 5 second
   if (sw == BTN_FULL) {
     full_screen = !full_screen;
     display.fillRect(DISPLNG + 1,0,27,LCD_HEIGHT, BGCOLOR); // clear text area that will be drawn below 
