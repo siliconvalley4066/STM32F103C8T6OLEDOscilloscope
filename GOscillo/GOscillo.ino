@@ -1,5 +1,5 @@
 /*
- * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.07
+ * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.08
  * The max DMA sampling rates is 5.14Msps with single channel, 2.57Msps with 2 channels.
  * The max software loop sampling rates is 100ksps with 2 channels.
  * + Pulse Generator
@@ -14,6 +14,7 @@
 
 #include <Adafruit_GFX.h>
 #include <HardwareTimer.h>
+#include "PeriodCount_STM.h"
 
 #define BUTTON5DIR
 //#define DISPLAY_IS_SSD1306
@@ -71,14 +72,17 @@ const int DISPLNG = 100;
 const int DOTS_DIV = 10;
 const byte ad_ch0 = PA0;                // Analog pin for channel 0
 const byte ad_ch1 = PA1;                // Analog pin for channel 1
-const long VREF[] = {32, 64, 161, 322, 645}; // reference voltage 3.3V ->  32 :   1V/div range (100mV/dot)
-                                        //                        ->  64 : 0.5V/div
-                                        //                        -> 161 : 0.2V/div
-                                        //                        -> 322 : 100mV/div
-                                        //                        -> 644 :  50mV/div
+const long VREF[] = {33, 66, 165, 330, 660}; // reference voltage 3.3V ->  33 :   1V/div range (100mV/dot)
+                                        //                        ->  66 : 0.5V/div
+                                        //                        -> 165 : 0.2V/div
+                                        //                        -> 330 : 100mV/div
+                                        //                        -> 660 :  50mV/div
+                                        // 3.3V / attn * DOTS_DIV / vdiv
 //const int MILLIVOL_per_dot[] = {100, 50, 20, 10, 5}; // mV/dot
-//const int ac_offset[] PROGMEM = {1792, -128, -1297, -1679, -1860}; // for OLED
-const int ac_offset[] PROGMEM = {3072, 512, -1043, -1552, -1804}; // for Web
+const int ac_offset[] PROGMEM = {1676, -186, -1303, -1676, -1862};  // 3 div offset
+//                            = 3 * vdiv / 3.3 * 4096 - 2048
+//const int ac_offset[] PROGMEM = {2917, 434, -1055, -1552, -1800}; // 4 div offset
+//                            = 4 * vdiv / 3.3 * 4096 - 2048
 const int MODE_ON = 0;
 const int MODE_INV = 1;
 const int MODE_OFF = 2;
@@ -98,7 +102,7 @@ const int TRIG_E_DN = 1;
 #define RATE_DUAL 1
 #define RATE_SLOW 10
 #define RATE_ROLL 16
-#define ITEM_MAX 29
+#define ITEM_MAX 30
 const char Rates[RATE_NUM][5] PROGMEM = {"1.9u", "3.9u", "11u ", "23us", "57us", "100u", "200u", "500u", " 1ms", " 2ms", " 5ms", "10ms", "20ms", "50ms", "0.1s", "0.2s", "0.5s", " 1s ", " 2s ", " 5s ", " 10s"};
 const unsigned long HREF[] PROGMEM = {2, 4, 11, 23, 57, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000, 2000000, 5000000, 10000000};
 const float dmahref[5] = {1.944, 3.889, 11.11, 22.78, 56.67};
@@ -140,6 +144,7 @@ byte time_mag = 1;  // magnify timebase: 1, 2, 5 or 10
 #define CH1COLOR  WHITE
 #define CH2COLOR  WHITE
 #define TXTCOLOR  WHITE
+#define TRGCOLOR  WHITE
 #define LED_ON    LOW
 #define LED_OFF   HIGH
 
@@ -206,10 +211,76 @@ void DrawGrid() {
   }
 }
 
-unsigned long fcount = 0;
 //const double freq_ratio = 20000.0 / 19987.0;
 
 void fcount_disp() {
+  static int skip = 0;
+  unsigned long count;
+  static double dfreq = 0.0;
+  uint8_t status;
+
+  if (!fcount_mode) return;
+  if (status = PeriodCount.available()) { // wait finish  restart
+    count = PeriodCount.read();
+    dfreq = PeriodCount.countToFrequency(count);
+    if (skip > 0) {
+      --skip;
+    } else {
+      if ((status == 1) && (dfreq > 0.001)) {     // ready
+        PeriodCount.adjust(dfreq);
+      } else {  // timeout
+        set_range();
+      }
+      skip = 2;
+    }
+  }
+  displayfreq(dfreq);
+}
+
+void displayfreq(double freq) {
+  String ss;
+  int i, f, l;
+  display.setTextColor(TXTCOLOR, BGCOLOR);
+  for (f = 7; f >= 0; --f) {
+    ss = String(freq, f);
+    if (ss.length() < 10) break;
+  }
+  if ((i = ss.indexOf('.')) > 7)  // i = integer part
+    ss.remove(i, 2);              // remove fractional part for >= 10,000,000Hz
+  l = ss.length();
+  if (i > 3) {  // greater than or equal to 1,000Hz
+    int x = DISPLNG - 78;
+    for (int j = 0; j < (i - 3); ++j) {
+      display.setCursor(x, txtLINE6);
+      display.print(ss.substring(j, j + 1));
+      x += 6;
+      if ((i-j) == 4 || (i-j) == 7) { // small thousand separator
+        display.setCursor(x, txtLINE6);
+        display.print(','); x += 6;
+      }
+    }
+    display.setCursor(x, txtLINE6); display.print(ss.substring(i - 3, l));
+    display.print("Hz");
+    if (i != 7 && i != 9) display.print(' ');
+  } else {  // below 1000Hz
+    display.setCursor(DISPLNG - 78, txtLINE6); display.print(ss);
+    display.print("Hz  ");
+  }
+}
+
+void set_range(void) {
+  unsigned long count;
+  PeriodCount.end();
+  // identify 360MHz - 8kHz
+  PeriodCount.setpre(8);
+  count = 8000 * PeriodCount.freqcount(1);    // 1msec gate
+  // identify 655.350kHz - 10Hz
+  PeriodCount.setpre(1);
+  if (count < 500000) {   // under 500kHz
+    count = 10 * PeriodCount.freqcount(100);  // 100msec gate
+  }
+  PeriodCount.adjust((double) count);
+  PeriodCount.begin(1000);
 }
 
 void display_range(byte rng) {

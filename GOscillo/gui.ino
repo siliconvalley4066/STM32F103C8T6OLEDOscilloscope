@@ -1,5 +1,5 @@
 void DrawText() {
-  display.fillRect(DISPLNG+1,0,27,64, BGCOLOR); // clear text area that will be drawn below 
+  display.fillRect(DISPLNG+1,0,LCD_WIDTH-DISPLNG-1,LCD_HEIGHT, BGCOLOR); // clear text area that will be drawn below 
 
   switch (menu) {
   case 0:
@@ -27,7 +27,11 @@ void DrawText() {
     display_trig_mode();
     set_line_color(5);
     display.print(trig_ch == ad_ch0 ? "TG1" : "TG2"); 
+#ifdef _ADAFRUIT_GFX_H
     display.print(trig_edge == TRIG_E_UP ? char(0x18) : char(0x19)); 
+#else
+    display.print(trig_edge == TRIG_E_UP ? '/' : '\\'); 
+#endif
     set_line_color(6);
     display.print("Tlev"); 
     set_line_color(7);
@@ -45,7 +49,7 @@ void DrawText() {
     set_line_color(4);
     display.print("CH2"); display_ac(CH1DCSW);
     set_line_color(5);
-    if (rate <= RATE_ILV && ch0_mode != MODE_OFF) {
+    if (rate < RATE_DUAL && ch0_mode != MODE_OFF) {
       display_mode(MODE_OFF);
     } else {
       display_mode(ch1_mode);
@@ -71,14 +75,19 @@ void DrawText() {
       display.print("PWM "); 
       set_line_color(6);
       display.print("DUTY"); 
-      set_line_color(7);
-      display.print("FREQ");
       if (pulse_mode && (item > 20 && item < 24)) {
         display.setTextColor(TXTCOLOR, BGCOLOR);
-        display.setCursor(DISPLNG - 54, txtLINE7);
+        display.setCursor(DISPLNG - 30, txtLINE7);
         disp_pulse_frq();
-        display.setCursor(DISPLNG - 36, txtLINE6);
+        if (item == 23)
+          display.fillRect(LCD_WIDTH-6,txtLINE7,5,8, TXTCOLOR); // highlight right side
+        else
+          display.fillRect(LCD_WIDTH-6,txtLINE7,5,8, BGCOLOR);  // highlight right side
+        display.setCursor(DISPLNG - 30, txtLINE6);
         disp_pulse_dty();
+      } else {
+        set_line_color(7);
+        display.print("FREQ");
       }
     }
     break;
@@ -95,7 +104,7 @@ void DrawText() {
     display.print("FREQ");
     if (dds_mode && (item > 25 && item < 29)) {
       display.setTextColor(TXTCOLOR, BGCOLOR);
-      display.setCursor(72, txtLINE7);
+      display.setCursor(LCD_WIDTH - 54, txtLINE7);
       disp_dds_freq();
     }
     set_line_color(5);
@@ -103,6 +112,9 @@ void DrawText() {
       display.print("MSR2");
     else
       display.print("MSR1");
+    set_line_color(6);
+    display.print("FCNT");
+    fcount_disp();
     break;
   }
   if (info_mode & 3) {
@@ -114,7 +126,7 @@ void DrawText() {
       measure_voltage(ch);
   }
   if (!full_screen && !fft_mode)
-    draw_trig_level(GRIDCOLOR);
+    draw_trig_level(TRGCOLOR);  // draw trig_lv mark
 }
 
 void draw_trig_level(int color) { // draw trig_lv mark
@@ -187,7 +199,7 @@ void CheckSW() {
   saveTimer = 5000;     // set EEPROM save timer to 5 second
   if (sw == BTN_FULL) {
     full_screen = !full_screen;
-    display.fillRect(DISPLNG + 1,0,27,LCD_HEIGHT, BGCOLOR); // clear text area that will be drawn below 
+    display.fillRect(DISPLNG+1,0,LCD_WIDTH-DISPLNG-1,LCD_HEIGHT, BGCOLOR);  // clear text area that will be drawn below 
   } else {
     switch (menu) {
     case 0:
@@ -365,9 +377,14 @@ void menu1_sw(byte sw) {
       else
         ch1_mode = MODE_ON;
     } else if (sw == BTN_LEFT) {  // CH1 - ON/OFF
-      if (rate <= RATE_ILV && ch0_mode != MODE_OFF) {
-        ch0_mode = MODE_OFF;
-        ch1_mode = MODE_ON;
+      if (rate < RATE_DUAL) {
+        if (ch1_mode == MODE_OFF) {
+          ch0_mode = MODE_OFF;
+          ch1_mode = MODE_ON;
+        } else {
+          ch0_mode = MODE_ON;
+          ch1_mode = MODE_OFF;
+        }
       } else if (ch1_mode == MODE_OFF) {
         ch1_mode = MODE_ON;
       } else {
@@ -428,6 +445,10 @@ void menu2_sw(byte sw) {
     break;
   case 5: // PWM
     if (sw == BTN_RIGHT) {        // +
+      if (fcount_mode == true) {  // stop frequency counter if active
+        PeriodCount.end();
+        fcount_mode = false;
+      }
       update_frq(0);
       pulse_start();
       pulse_mode = true;
@@ -523,7 +544,21 @@ void menu3_sw(byte sw) {
       info_mode &= ~4;
     }
     break;
-  }
+  case 6: // Frequency Counter
+    if (sw == BTN_RIGHT) {        // on
+      if (pulse_mode == true) {
+        pulse_close();
+        pulse_mode = false;
+      }
+      fcount_mode = true;
+      PeriodCount.begin(1000);
+      set_range();
+    } else if (sw == BTN_LEFT) {  // off
+      fcount_mode = false;
+      PeriodCount.end();
+    }
+    break;
+ }
   menu_updown(sw);
 }
 
