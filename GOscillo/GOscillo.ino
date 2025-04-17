@@ -1,5 +1,5 @@
 /*
- * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.08
+ * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.10
  * The max DMA sampling rates is 5.14Msps with single channel, 2.57Msps with 2 channels.
  * The max software loop sampling rates is 100ksps with 2 channels.
  * + Pulse Generator
@@ -212,9 +212,9 @@ void DrawGrid() {
 }
 
 //const double freq_ratio = 20000.0 / 19987.0;
+bool freq_skip = false;
 
 void fcount_disp() {
-  static int skip = 0;
   unsigned long count;
   static double dfreq = 0.0;
   uint8_t status;
@@ -222,16 +222,15 @@ void fcount_disp() {
   if (!fcount_mode) return;
   if (status = PeriodCount.available()) { // wait finish  restart
     count = PeriodCount.read();
-    dfreq = PeriodCount.countToFrequency(count);
-    if (skip > 0) {
-      --skip;
+    if (freq_skip) {
+      freq_skip = false;
     } else {
+      dfreq = PeriodCount.countToFrequency(count);
       if ((status == 1) && (dfreq > 0.001)) {     // ready
-        PeriodCount.adjust(dfreq);
+        freq_skip = PeriodCount.adjust(dfreq);
       } else {  // timeout
         set_range();
       }
-      skip = 2;
     }
   }
   displayfreq(dfreq);
@@ -281,6 +280,7 @@ void set_range(void) {
   }
   PeriodCount.adjust((double) count);
   PeriodCount.begin(1000);
+  freq_skip = true; // throw away first result
 }
 
 void display_range(byte rng) {

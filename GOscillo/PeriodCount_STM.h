@@ -13,7 +13,7 @@ class PeriodCountClass {
     static void gatetime(uint16_t msec);
     static double countToFrequency(uint32_t count);
     static void timeout(uint32 msec);
-    static void adjust(double freq);
+    static bool adjust(double freq);
     static uint16_t get_psc(void);
     static uint16_t get_arr(void);
     static uint8_t get_prescaler();
