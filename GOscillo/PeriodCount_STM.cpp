@@ -1,5 +1,5 @@
 /*
-   STM32F103C8T6 Period Counter Library Version 2.03
+   STM32F103C8T6 Period Counter Library Version 2.04
    Copyright (c) 2024, Siliconvalley4066
    Licenced under the GNU GPL Version 3.0
 */
@@ -15,14 +15,17 @@ volatile uint16_t PeriodCountClass::_prevb = 0;
 volatile uint32 PeriodCountClass::_count = 0;
 volatile uint32 csec, osec;
 volatile bool PeriodCountClass::_ready = false;
+bool PeriodCountClass::adjusted = false;
 
 void PeriodCountClass::begin(uint16_t msec) {
   afio_remap(AFIO_REMAP_TIM2_PARTIAL_1);  // timer2 input is normally A0. remap to A15
   _gatetime = msec;
+  set_range();  // identify frequency around
   osec = millis();
   PeriodCountClass::init();
   timer_attach_interrupt(TIMER1, TIMER_CC1_INTERRUPT, capture_count);
   timer_enable_irq(TIMER1, TIMER_CC1_INTERRUPT);
+  adjusted = true;
 }
 
 void PeriodCountClass::init(void) {
@@ -62,7 +65,12 @@ void PeriodCountClass::init(void) {
 uint8_t PeriodCountClass::available(void) {
   uint8_t count_ready;
   if (!_ready) count_ready = 0;
-  else count_ready = 1;
+  else if (adjusted) {
+    count_ready = 0; adjusted = _ready = false;
+    PeriodCountClass::_measure_time = millis();
+  } else {
+    count_ready = 1;
+  }
   if ((millis() - PeriodCountClass::_measure_time) > _timeout) count_ready = 2;
   return count_ready;
 }
@@ -124,7 +132,6 @@ double PeriodCountClass::countToFrequency(uint32_t count) {
 }
 
 bool PeriodCountClass::adjust(double freq) {
-  bool adjusted = false;
   uint16_t psc, arr;
   uint32 ifreq = freq * (double) _gatetime / 1000.0;
   if (ifreq < 288000000L) {
@@ -219,6 +226,19 @@ uint16_t PeriodCountClass::freqcount(uint16_t msec) {
   delay(msec);
   Timer2.pause();
   return (Timer2.getCount());
+}
+
+void PeriodCountClass::set_range(void) {
+  unsigned long count;
+  // identify 360MHz - 8kHz
+  setpre(8);
+  count = 8000 * freqcount(1);    // 1msec gate
+  // identify 655.350kHz - 10Hz
+  setpre(1);
+  if (count < 500000) {   // under 500kHz
+    count = 10 * freqcount(100);  // 100msec gate
+  }
+  adjust((double) count);
 }
 
 PeriodCountClass PeriodCount;

@@ -24,6 +24,7 @@ class PeriodCountClass {
     static uint16_t getetpsdiv(void);
     static void init(void);
     static void capture_count(void);
+    static void set_range(void);
     static uint16_t _gatetime;
     static uint8_t _prescaler;      // use 1/8 prescaler or not
     static uint16_t _psc;
@@ -34,6 +35,7 @@ class PeriodCountClass {
     static volatile uint16_t _prevb;
     static volatile uint32 _count;
     static volatile bool _ready;
+    static bool adjusted;
 };
 
 extern PeriodCountClass PeriodCount;
