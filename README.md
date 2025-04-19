@@ -18,7 +18,7 @@ Specifications:
 <li>Sampling rate selection</li>
 <li>Built in Pulse Generator</li>
 <li>Built in DDS Function Generator</li>
-<li>Built in Frequency Counter up to 192MHz</li>
+<li>Built in Reciprocal Frequency Counter up to 192MHz</li>
 <br>
 <p>
 Develop environment is:<br>
