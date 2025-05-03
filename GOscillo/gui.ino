@@ -546,18 +546,22 @@ void menu3_sw(byte sw) {
     break;
   case 6: // Frequency Counter
     if (sw == BTN_RIGHT) {        // on
-      if (pulse_mode == true) {
-        pulse_close();
-        pulse_mode = false;
+      if (fcount_mode) {
+        calib = true;
+      } else {
+        if (pulse_mode == true) {
+          pulse_close();
+          pulse_mode = false;
+        }
+        fcount_mode = true;
+        PeriodCount.begin(1000);
       }
-      fcount_mode = true;
-      PeriodCount.begin(1000);
     } else if (sw == BTN_LEFT) {  // off
       fcount_mode = false;
       PeriodCount.end();
     }
     break;
- }
+  }
   menu_updown(sw);
 }
 

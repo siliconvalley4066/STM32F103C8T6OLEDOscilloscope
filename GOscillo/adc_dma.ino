@@ -48,6 +48,7 @@ void takeSamples() {
   dma_disable(DMA1, DMA_CH1); //End of trasfer, disable DMA and Continuous mode.
   split_capture();
   int t = trigger_point();
+  if (t >= (NSAMP/2 - SAMPLES) && (trig_mode == TRIG_NORM)) return;
   scaleDataArray(ad_ch0, t);
   scaleDataArray(ad_ch1, t);
 //  debug_print();
