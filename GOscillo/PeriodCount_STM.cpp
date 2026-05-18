@@ -1,5 +1,5 @@
 /*
-   STM32F103C8T6 Period Counter Library Version 2.04
+   STM32F103C8T6 Period Counter Library Version 2.06
    Copyright (c) 2024, Siliconvalley4066
    Licenced under the GNU GPL Version 3.0
 */
@@ -9,11 +9,11 @@ uint8_t PeriodCountClass::_prescaler = 8;      // use 1/8 prescaler or not
 uint16_t PeriodCountClass::_gatetime = 1000;
 uint16_t PeriodCountClass::_psc = 45;
 uint16_t PeriodCountClass::_arr = 65535;
-uint32 PeriodCountClass::_measure_time, PeriodCountClass::_timeout = 5000;
+uint32_t PeriodCountClass::_measure_time, PeriodCountClass::_timeout = 5000;
 volatile uint16_t PeriodCountClass::_preva = 0;
 volatile uint16_t PeriodCountClass::_prevb = 0;
-volatile uint32 PeriodCountClass::_count = 0;
-volatile uint32 csec, osec;
+volatile uint32_t PeriodCountClass::_count = 0;
+volatile uint32_t csec, osec;
 volatile bool PeriodCountClass::_ready = false;
 bool PeriodCountClass::adjusted = false;
 
@@ -105,9 +105,10 @@ void PeriodCountClass::setpre(int pre) {
 
 void PeriodCountClass::gatetime(uint16_t msec) {
   _gatetime = msec;
+  adjusted = true;
 }
 
-void PeriodCountClass::timeout(uint32 msec) {
+void PeriodCountClass::timeout(uint32_t msec) {
   _timeout = msec;
 }
 
@@ -127,19 +128,20 @@ uint16_t PeriodCountClass::getetpsdiv(void) {
 
 double PeriodCountClass::countToFrequency(uint32_t count) {
   if (count == 0) return 0.0;
-  if (count > 360000000L) count = 360000000L; // upper limit FCPU * 5sec
+  if (count > 360000000L) count = 360000000L; // upper limit F_CPU * 5sec
   return (double) ((uint32)_prescaler * (uint32)(_psc + 1) * ((uint32)_arr + 1)) * (double) F_CPU / (double) count;
 }
 
 bool PeriodCountClass::adjust(double freq) {
   uint16_t psc, arr;
-  uint32 ifreq = freq * (double) _gatetime / 1000.0;
+  uint8_t prescaler = _prescaler;
+  uint32_t ifreq = freq * (double) _gatetime / 1000.0;
   if (ifreq < 288000000L) {
     if (ifreq > 650000) {
-      setpre(8);          // set ETR prescaler to 8
+      prescaler = 8;
       ifreq >>= 3;
     } else if (ifreq < 640000) {
-      setpre(1);          // set ETR prescaler to 1
+      prescaler = 1;
     } else if (_prescaler == 8) {
       ifreq >>= 3;
     }
@@ -151,10 +153,11 @@ bool PeriodCountClass::adjust(double freq) {
   } else {
     return false; // do nothing
   }
-  uint16_t etpsdiv = getetpsdiv();
-  TIMER2->regs.gen->SMCR = TIMER_SMCR_ECE | etpsdiv | TIMER_SMCR_MSM; // external clock mode 2 + divider/8
-  _psc = psc; _arr = arr;
-  if (TIMER2->regs.gen->ARR != _arr || TIMER2->regs.gen->PSC != _psc) {
+  uint32_t div1 = _prescaler * _arr * _psc;
+  uint32_t div2 = prescaler * arr * psc;
+  if (div1 > (div2 + (div2 / 10)) || div1 < (div2 - (div2 / 10))) {
+    _psc = psc; _arr = arr;
+    setpre(prescaler);      // set ETR prescaler
     TIMER2->regs.gen->PSC = _psc;
     TIMER2->regs.gen->CNT = 0;
     TIMER2->regs.gen->ARR = _arr;
@@ -176,8 +179,8 @@ uint8_t PeriodCountClass::get_prescaler() {
   return _prescaler;
 }
 
-uint32 PeriodCountClass::mod_calc(uint16_t a, uint16_t b) {
-  uint32 f = b - a;
+uint32_t PeriodCountClass::mod_calc(uint16_t a, uint16_t b) {
+  uint32_t f = b - a;
   if (a > b) --f;
   f = (f << 16) + a;
   return (f);
@@ -199,7 +202,7 @@ void PeriodCountClass::capture_count(void) {
   _preva = aa;
   _prevb = bb;
   _ready = true;
-  uint32 nsec = millis();
+  uint32_t nsec = millis();
   csec = nsec - osec;
   osec = nsec;
   if (csec < 10) {    // less than 10msec is too short
@@ -234,8 +237,8 @@ void PeriodCountClass::set_range(void) {
   setpre(8);
   count = 8000 * freqcount(1);    // 1msec gate
   // identify 655.350kHz - 10Hz
-  setpre(1);
   if (count < 500000) {   // under 500kHz
+    setpre(1);
     count = 10 * freqcount(100);  // 100msec gate
   }
   adjust((double) count);

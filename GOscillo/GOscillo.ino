@@ -1,10 +1,10 @@
 /*
- * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.12
+ * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.13
  * The max DMA sampling rates is 5.14Msps with single channel, 2.57Msps with 2 channels.
  * The max software loop sampling rates is 100ksps with 2 channels.
  * + Pulse Generator
  * + PWM DDS Function Generator (23 waveforms)
- * Copyright (c) 2023, Siliconvalley4066
+ * Copyright (c) 2023, 2026 Siliconvalley4066
  */
 /*
  * Arduino Oscilloscope using a graphic LCD
