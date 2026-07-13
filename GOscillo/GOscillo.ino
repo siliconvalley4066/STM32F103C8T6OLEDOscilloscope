@@ -1,10 +1,10 @@
 /*
- * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.14
+ * STM32F103C8T6 Oscilloscope using a 128x64 OLED Version 1.15
  * The max DMA sampling rates is 5.14Msps with single channel, 2.57Msps with 2 channels.
  * The max software loop sampling rates is 100ksps with 2 channels.
  * + Pulse Generator
  * + PWM DDS Function Generator (23 waveforms)
- * Copyright (c) 2023, 2026 Siliconvalley4066
+ * Copyright (c) 2023,2026, Siliconvalley4066
  */
 /*
  * Arduino Oscilloscope using a graphic LCD
@@ -17,16 +17,21 @@
 #include "PeriodCount_STM.h"
 
 #define BUTTON5DIR
-//#define DISPLAY_IS_SSD1306
+#define DISPLAY_IS_SSD1306
+//#define DISPLAY_IS_SH1107V
 #define SCREEN_WIDTH   128              // OLED display width
 #define SCREEN_HEIGHT   64              // OLED display height
-#define OLED_RESET      -1      // Reset pin # (or -1 if sharing Arduino reset pin)
+#define OLED_RESET     -1     // Reset pin # (or -1 if sharing Arduino reset pin)
 #ifdef DISPLAY_IS_SSD1306
 #include <Adafruit_SSD1306.h>
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #else
 #include <Adafruit_SH110X.h>
+#ifdef DISPLAY_IS_SH1107V
+Adafruit_SH1107 display = Adafruit_SH1107(SCREEN_HEIGHT, SCREEN_WIDTH, &Wire, OLED_RESET);
+#else
 Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+#endif
 #define WHITE 1
 #define BLACK 0
 #endif
@@ -63,8 +68,8 @@ extern unsigned short count;
 extern long ifreq;
 extern byte wave_id;
 
-const int LCD_WIDTH = 128;
-const int LCD_HEIGHT = 64;
+#define LCD_WIDTH 128
+#define LCD_HEIGHT 64
 const int LCD_YMAX = 60;
 const int SAMPLES = 128;
 const int NSAMP = 512;
@@ -80,9 +85,9 @@ const long VREF[] = {33, 66, 165, 330, 660}; // reference voltage 3.3V ->  33 : 
                                         // 3.3V / attn * DOTS_DIV / vdiv
 //const int MILLIVOL_per_dot[] = {100, 50, 20, 10, 5}; // mV/dot
 const int ac_offset[] PROGMEM = {1676, -186, -1303, -1676, -1862};  // 3 div offset
-//                            = 3 * vdiv / 3.3 * 4096 - 2048
+//                              = 3 * vdiv / 3.3 * 4096 - 2048
 //const int ac_offset[] PROGMEM = {2917, 434, -1055, -1552, -1800}; // 4 div offset
-//                            = 4 * vdiv / 3.3 * 4096 - 2048
+//                              = 4 * vdiv / 3.3 * 4096 - 2048
 const int MODE_ON = 0;
 const int MODE_INV = 1;
 const int MODE_OFF = 2;
@@ -132,6 +137,8 @@ volatile bool wfft, wdds;
 byte time_mag = 1;  // magnify timebase: 1, 2, 5 or 10
 double compensation = 1.0;  // compensation for frequency counter
 boolean calib = false;      // calibrate flag for frequency counter
+int trigger_pos;
+int mag_pos = 0;
 
 #define LEFTPIN   PB13  // LEFT
 #define RIGHTPIN  PB14  // RIGHT
@@ -147,6 +154,7 @@ boolean calib = false;      // calibrate flag for frequency counter
 #define CH2COLOR  WHITE
 #define TXTCOLOR  WHITE
 #define TRGCOLOR  WHITE
+#define HIGHCOLOR WHITE
 #define LED_ON    LOW
 #define LED_OFF   HIGH
 
@@ -164,9 +172,12 @@ void setup(){
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // select 3C or 3D (set your OLED I2C address)
 #else
   display.begin(0x3c, true);                  // initialise the library
+#ifdef DISPLAY_IS_SH1107V
+  display.setRotation(1);
+#endif
 #endif
 //  Wire.begin();
-  Wire.setClock(400000);  // fSCL = 400kHz
+  Wire.setClock(400000);
   delay(10);
 
 //  Serial.begin(115200);
@@ -200,17 +211,17 @@ void DrawGrid() {
   if (full_screen) disp_leng = SAMPLES;
   else disp_leng = DISPLNG;
   for (int x=0; x<=disp_leng; x += 2) { // Horizontal Line
-    for (int y=0; y<=LCD_YMAX; y += DOTS_DIV) {
+    for (int y=LCD_YMAX; y>=0; y -= DOTS_DIV) {
       display.drawPixel(x, y, GRIDCOLOR);
-//      CheckSW();
     }
   }
+  CheckSW();
   for (int x=0; x<=disp_leng; x += DOTS_DIV ) { // Vertical Line
-    for (int y=0; y<=LCD_YMAX; y += 2) {
+    for (int y=LCD_YMAX; y>=0; y -= 2) {
       display.drawPixel(x, y, GRIDCOLOR);
-//      CheckSW();
     }
   }
+  CheckSW();
 }
 
 void fcount_disp() {
@@ -302,15 +313,19 @@ void display_ac(byte pin) {
 void set_line_color(byte line) {
   if ((item & 0x7) == line) display.setTextColor(BGCOLOR, TXTCOLOR);  // highlight
   else display.setTextColor(TXTCOLOR, BGCOLOR);           // normal
+#if LCD_HEIGHT == 64
   display.setCursor(DISPTXT, 8 * line); // locate curser for printing text
+#elif LCD_HEIGHT == 80
+  display.setCursor(DISPTXT, 10 * line + 1); // locate curser for printing text
+#endif
 }
 
 void DrawGrid(int x) {
   if ((x % DOTS_DIV) == 0) {
-    for (int y=0; y<=LCD_YMAX; y += 2)
+    for (int y=LCD_YMAX; y>=0; y -= 2)
       display.drawPixel(x, y, GRIDCOLOR);
   } else if ((x % 2) == 0)
-    for (int y=0; y<=LCD_YMAX; y += DOTS_DIV)
+    for (int y=LCD_YMAX; y>=0; y -= DOTS_DIV)
       display.drawPixel(x, y, GRIDCOLOR);
 }
 
@@ -365,23 +380,23 @@ void scaleDataArray(byte ad_ch, int trig_point)
   byte *pdata, ch_mode, range, ch;
   short ch_off;
   uint16_t *idata, *qdata;
-  long a, b;
+  long a;
 
+  trigger_pos = trig_point;
   if (ad_ch == ad_ch1) {
     ch_off = ch1_off;
     ch_mode = ch1_mode;
     range = range1;
-    pdata = data[sample+1];
     idata = &cap_buf1[trig_point];
     ch = 1;
   } else {
     ch_off = ch0_off;
     ch_mode = ch0_mode;
     range = range0;
-    pdata = data[sample+0];
     idata = &cap_buf[trig_point];
     ch = 0;
   }
+  pdata = data[sample+ch];
   for (int i = 0; i < SAMPLES; i++) {
     a = ((*idata + ch_off) * VREF[range] + 2048) >> 12;
     if (a > LCD_YMAX) a = LCD_YMAX;
@@ -396,10 +411,12 @@ void scaleDataArray(byte ad_ch, int trig_point)
     case 2:
     case 5:
     case 10:
-      mag(data[sample+ch], time_mag); // magnify timebase for display
+      mag_pos = constrain(mag_pos, 0, SAMPLES - SAMPLES/time_mag - 5);
+      mag(data[sample+ch], time_mag, mag_pos);  // magnify timebase for display
       break;
-    default:  // do nothing
+    default:
       time_mag = 1;   // fix odd value
+      mag_pos = 0;    // reset the position
       break;
     }
   }
@@ -550,16 +567,17 @@ void draw_screen() {
   } else {
     DrawGrid();
     ClearAndDrawGraph();
+    CheckSW();
     if (!full_screen) DrawText();
+    mag_bar();
   }
   display.display();
 }
 
-#define textINFO 54
+#define textINFO (DISPLNG-48)
 void measure_frequency(int ch) {
   int x1, x2;
   freqDuty(ch);
-  display.setTextColor(TXTCOLOR, BGCOLOR);
   display.setCursor(textINFO, txtLINE0);
   float freq = waveFreq[ch];
   if (freq < 999.5)
@@ -572,7 +590,7 @@ void measure_frequency(int ch) {
   }
   display.print("Hz");
   if (fft_mode) return;
-  display.setCursor(textINFO + 12, txtLINE1);
+  display.setCursor(textINFO + 18, txtLINE1);
   float duty = waveDuty[ch];
   if (duty > 99.9499) duty = 99.9;
   display.print(duty, 1);  display.print('%');
@@ -661,8 +679,12 @@ void sample_dual_ms(unsigned int r) { // dual channel. r > 500
 void plotFFT() {
   int ylim = LCD_HEIGHT - 8;
 
+  int j = 0;
+  if (rate <= RATE_DMA) {
+    j = trigger_pos;
+  }
   for (int i = 0; i < FFT_N; i++) {
-    vReal[i] = cap_buf[i];
+    vReal[i] = cap_buf[j++];
     vImag[i] = 0.0;
   }
   FFT.dcRemoval();
@@ -716,7 +738,7 @@ float freqhref() {
 #ifdef EEPROM_START
 
 void saveEEPROM() {                   // Save the setting value in EEPROM after waiting a while after the button operation.
-  uint16 p = EEPROM_START;
+  uint16_t p = EEPROM_START;
   if (saveTimer > 0) {                // If the timer value is positive
     saveTimer = saveTimer - timeExec; // Timer subtraction
     if (saveTimer <= 0) {             // if time up
@@ -744,8 +766,8 @@ void saveEEPROM() {                   // Save the setting value in EEPROM after 
       EEPROM.update(p++, (ifreq >> 16) & 0xffff);
       EEPROM.update(p++, time_mag);
       uint16_t *q = (uint16_t *) &compensation;
-      EEPROM.update(p++, *q++); EEPROM.update(p++, *q++);
-      EEPROM.update(p++, *q++); EEPROM.update(p++, *q++);
+      for (int i = 0; i < 4; ++i)
+        EEPROM.update(p++, *q++);
     }
   }
 }
@@ -770,7 +792,7 @@ void set_default() {
   duty = 128;     // PWM 50%
   p_range = 1;    // PWM range
   count = 35999;  // PWM 1kHz
-  dds_mode = false;
+  dds_mode = true;
   wave_id = 0;    // sine wave
   ifreq = 23841;  // 238.41Hz
   time_mag = 1;   // magnify timebase
@@ -781,7 +803,7 @@ extern const byte wave_num;
 
 #ifdef EEPROM_START
 void loadEEPROM() { // Read setting values from EEPROM (abnormal values will be corrected to default)
-  uint16 p = EEPROM_START, error = 0;
+  uint16_t p = EEPROM_START, error = 0;
 
   range0 = EEPROM.read(p++);                // range0
   if ((range0 < RANGE_MIN) || (range0 > RANGE_MAX)) ++error;
@@ -824,10 +846,10 @@ void loadEEPROM() { // Read setting values from EEPROM (abnormal values will be 
   *((uint16 *)&ifreq) = EEPROM.read(p++);     // ifreq low
   *((uint16 *)&ifreq + 1) = EEPROM.read(p++); // ifreq high
   if (ifreq > 999999L) ++error;
-  time_mag = EEPROM.read(p++);               // magnify timebase
+  time_mag = EEPROM.read(p++);              // magnify timebase
   uint16_t *q = (uint16_t *) &compensation;
-  *q++ = EEPROM.read(p++); *q++ = EEPROM.read(p++);
-  *q++ = EEPROM.read(p++); *q++ = EEPROM.read(p++);
+  for (int i = 0; i < 4; ++i)
+    *q++ = EEPROM.read(p++);
   if (compensation < 1.002 && compensation > 0.998) ; // OK
   else ++error;
   if (error > 0) {

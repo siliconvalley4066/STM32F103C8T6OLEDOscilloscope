@@ -73,19 +73,15 @@ void takeSamples_ilv(byte ad_ch) {
 }
 
 void order_capture(byte ad_ch) {  // Swap word order to fix STM32 bug in packing 16bits into 32bits
+  uint32_t *p = cap_buf32, *q;
   if (ad_ch == ad_ch0) {
-    uint16_t tmp, *p = cap_buf;
-    for (int i=0; i < NSAMP/2; i += 2) {
-      tmp = *p;
-      *p++ = cap_buf[i+1];
-      *p++ = tmp;
-    }
+    q = cap_buf32;
   } else {
-    uint16_t *p = cap_buf1;
-    for (int i=0; i < NSAMP/2; i += 2) {
-      *p++ = cap_buf[i+1];
-      *p++ = cap_buf[i];
-    }
+    q = cap_buf33;
+  }
+  for (uint16_t i=0; i < NSAMP/4; i++) {
+    uint32_t w = *p++;
+    *q++ = (w >> 16) | (w << 16);
   }
 }
 
